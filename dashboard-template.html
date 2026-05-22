@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MWGL Queue Snapshot Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #4472C4; --secondary: #70AD47; --danger: #E74C3C;
+            --warning: #F39C12; --light: #ECF0F1; --dark: #2C3E50; --border: #BDC3C7;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; padding: 20px; color: var(--dark);
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .header h1 { color: var(--primary); margin-bottom: 10px; font-size: 2.5em; }
+        .header-meta { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 15px; font-size: 14px; color: #7F8C8D; }
+        .meta-item { display: flex; gap: 8px; }
+        .meta-item strong { color: var(--dark); }
+        .controls { background: white; padding: 20px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+        .control-group { display: flex; flex-direction: column; }
+        .control-group label { font-weight: 600; margin-bottom: 8px; color: var(--dark); font-size: 14px; }
+        input[type="text"], select { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; transition: all 0.3s ease; }
+        input[type="text"]:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(68, 114, 196, 0.1); }
+        .button-group { display: flex; gap: 10px; align-items: flex-end; }
+        button { padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; font-size: 14px; }
+        button:hover { background: #3560a8; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(68, 114, 196, 0.3); }
+        button.secondary { background: var(--secondary); }
+        button.secondary:hover { background: #5c8c37; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); }
+        .stat-card.danger { border-left-color: var(--danger); }
+        .stat-card.warning { border-left-color: var(--warning); }
+        .stat-card.success { border-left-color: var(--secondary); }
+        .stat-label { font-size: 12px; color: #95A5A6; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+        .stat-value { font-size: 32px; font-weight: 700; color: var(--primary); }
+        .stat-card.danger .stat-value { color: var(--danger); }
+        .stat-card.warning .stat-value { color: var(--warning); }
+        .stat-card.success .stat-value { color: var(--secondary); }
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .chart-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .chart-container h3 { color: var(--primary); margin-bottom: 20px; font-size: 16px; }
+        .chart-wrapper { position: relative; height: 300px; }
+        .table-container { background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
+        .table-header { padding: 20px; background: var(--primary); color: white; }
+        .table-header h3 { font-size: 18px; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: #F5F5F5; }
+        th { padding: 15px; text-align: left; font-weight: 600; color: var(--dark); border-bottom: 2px solid var(--border); cursor: pointer; user-select: none; font-size: 13px; }
+        th:hover { background: #EEEEEE; }
+        th.sortable::after { content: ' \u21C5'; opacity: 0.5; }
+        tbody tr { border-bottom: 1px solid var(--border); transition: all 0.2s ease; }
+        tbody tr:hover { background: #F9F9F9; }
+        td { padding: 15px; font-size: 14px; }
+        .open-cases { background: #FFF3CD; color: #856404; padding: 4px 8px; border-radius: 4px; font-weight: 600; display: inline-block; }
+        .open-cases.high { background: #F8D7DA; color: #721C24; }
+        .open-cases.zero { background: #D4EDDA; color: #155724; }
+        .state-badge { background: var(--primary); color: white; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 12px; display: inline-block; }
+        .no-results { text-align: center; padding: 40px; color: #95A5A6; font-size: 16px; }
+        .pagination { display: flex; justify-content: center; gap: 10px; padding: 20px; background: #F9F9F9; }
+        .pagination button { background: var(--primary); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .pagination button.active { background: var(--danger); }
+        .pagination button:disabled { background: #BDC3C7; cursor: not-allowed; }
+        .footer { text-align: center; color: white; margin-top: 30px; font-size: 12px; }
+        .archive-section { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 30px; }
+        .archive-section h3 { color: var(--primary); margin-bottom: 15px; }
+        .archive-list { max-height: 200px; overflow-y: auto; }
+        .archive-item { padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .archive-item a { color: var(--primary); text-decoration: none; font-weight: 600; }
+        .archive-item a:hover { text-decoration: underline; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8em; }
+            .controls { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: 1fr; }
+            table { font-size: 12px; }
+            td, th { padding: 10px; }
+        }
+        .loading { text-align: center; padding: 40px; color: var(--primary); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MWGL Queue Snapshot</h1>
+            <div class="header-meta">
+                <div class="meta-item"><strong>Generated:</strong><span id="timestamp">--</span></div>
+                <div class="meta-item"><strong>Total Districts:</strong><span id="totalCount">0</span></div>
+                <div class="meta-item"><strong>With Open Cases:</strong><span id="withCases">0</span></div>
+            </div>
+        </div>
+        <div class="controls">
+            <div class="control-group">
+                <label for="searchInput">Search by District Name</label>
+                <input type="text" id="searchInput" placeholder="Enter district name...">
+            </div>
+            <div class="control-group">
+                <label for="stateFilter">Filter by State</label>
+                <select id="stateFilter"><option value="">All States</option></select>
+            </div>
+            <div class="control-group">
+                <label for="industryFilter">Filter by Industry</label>
+                <select id="industryFilter"><option value="">All Industries</option></select>
+            </div>
+            <div class="control-group button-group">
+                <button onclick="resetFilters()">Reset Filters</button>
+                <button class="secondary" onclick="downloadTableAsCSV()">Download CSV</button>
+            </div>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card success"><div class="stat-label">Total Districts</div><div class="stat-value" id="statTotal">0</div></div>
+            <div class="stat-card"><div class="stat-label">With Open Cases</div><div class="stat-value" id="statOpenCases">0</div></div>
+            <div class="stat-card danger"><div class="stat-label">Critical (3+ Cases)</div><div class="stat-value" id="statCritical">0</div></div>
+            <div class="stat-card warning"><div class="stat-label">States Represented</div><div class="stat-value" id="statStates">0</div></div>
+        </div>
+        <div class="charts-grid">
+            <div class="chart-container"><h3>Districts by State</h3><div class="chart-wrapper"><canvas id="stateChart"></canvas></div></div>
+            <div class="chart-container"><h3>Open Cases Distribution</h3><div class="chart-wrapper"><canvas id="casesChart"></canvas></div></div>
+        </div>
+        <div class="table-container">
+            <div class="table-header"><h3>MWGL Districts</h3></div>
+            <div id="tableContent"><div class="loading">Loading data...</div></div>
+        </div>
+        <div class="archive-section" id="archiveSection" style="display: none;">
+            <h3>Previous Snapshots</h3>
+            <div class="archive-list" id="archiveList"></div>
+        </div>
+        <div class="footer"><p>MWGL Queue Snapshot Dashboard - Updated automatically every weekday at 3 AM CST</p></div>
+    </div>
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        const itemsPerPage = 25;
+        let stateChart, casesChart;
+
+        document.addEventListener('DOMContentLoaded', () => { loadData(); setupEventListeners(); });
+
+        function setupEventListeners() {
+            document.getElementById('searchInput').addEventListener('input', filterTable);
+            document.getElementById('stateFilter').addEventListener('change', filterTable);
+            document.getElementById('industryFilter').addEventListener('change', filterTable);
+        }
+
+        function loadData() {
+            try {
+                if (typeof dashboardData !== 'undefined') {
+                    allData = dashboardData;
+                    applyFilters(); updateStats(); populateFilters(); renderCharts(); renderTable(); loadArchive();
+                } else {
+                    document.getElementById('tableContent').innerHTML = '<div class="no-results">No data available. Check back soon!</div>';
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('tableContent').innerHTML = '<div class="no-results">Error loading dashboard.</div>';
+            }
+        }
+
+        function populateFilters() {
+            const states = [...new Set(allData.map(d => d.state))].sort();
+            const stateSelect = document.getElementById('stateFilter');
+            states.forEach(state => { const o = document.createElement('option'); o.value = state; o.textContent = state; stateSelect.appendChild(o); });
+            const industries = [...new Set(allData.map(d => d.industry || 'Unknown'))].sort();
+            const industrySelect = document.getElementById('industryFilter');
+            industries.forEach(industry => { const o = document.createElement('option'); o.value = industry; o.textContent = industry; industrySelect.appendChild(o); });
+        }
+
+        function filterTable() { applyFilters(); currentPage = 1; renderTable(); }
+
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const stateFilter = document.getElementById('stateFilter').value;
+            const industryFilter = document.getElementById('industryFilter').value;
+            filteredData = allData.filter(district => {
+                const nameMatch = district.name.toLowerCase().includes(searchTerm);
+                const stateMatch = !stateFilter || district.state === stateFilter;
+                const industryMatch = !industryFilter || district.industry === industryFilter;
+                return nameMatch && stateMatch && industryMatch;
+            });
+            updateStats();
+        }
+
+        function updateStats() {
+            const total = allData.length;
+            const withCases = allData.filter(d => d.openCases > 0).length;
+            const critical = allData.filter(d => d.openCases >= 3).length;
+            const states = [...new Set(allData.map(d => d.state))].length;
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statOpenCases').textContent = withCases;
+            document.getElementById('statCritical').textContent = critical;
+            document.getElementById('statStates').textContent = states;
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('withCases').textContent = withCases;
+            const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            document.getElementById('timestamp').textContent = date;
+        }
+
+        function renderCharts() {
+            const stateData = {};
+            allData.forEach(d => { stateData[d.state] = (stateData[d.state] || 0) + 1; });
+            const stateCtx = document.getElementById('stateChart').getContext('2d');
+            if (stateChart) stateChart.destroy();
+            stateChart = new Chart(stateCtx, {
+                type: 'bar',
+                data: { labels: Object.keys(stateData).sort(), datasets: [{ label: 'Districts', data: Object.values(stateData), backgroundColor: '#4472C4', borderColor: '#3560a8', borderWidth: 1 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            });
+            const casesCtx = document.getElementById('casesChart').getContext('2d');
+            if (casesChart) casesChart.destroy();
+            casesChart = new Chart(casesCtx, {
+                type: 'doughnut',
+                data: { labels: ['0 Cases', '1-2 Cases', '3+ Cases'], datasets: [{ data: [ allData.filter(d => d.openCases === 0).length, allData.filter(d => d.openCases >= 1 && d.openCases < 3).length, allData.filter(d => d.openCases >= 3).length ], backgroundColor: ['#70AD47', '#F39C12', '#E74C3C'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function renderTable() {
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageData = filteredData.slice(start, end);
+            if (pageData.length === 0) { document.getElementById('tableContent').innerHTML = '<div class="no-results">No districts match your filters.</div>'; return; }
+            let html = '<table><thead><tr>';
+            html += '<th class="sortable" onclick="sortTable(\'name\')">District Name</th>';
+            html += '<th class="sortable" onclick="sortTable(\'state\')">State</th>';
+            html += '<th>City</th><th>Phone</th><th>Industry</th>';
+            html += '<th class="sortable" onclick="sortTable(\'openCases\')">Open Cases</th>';
+            html += '</tr></thead><tbody>';
+            pageData.forEach(district => {
+                const caseClass = district.openCases === 0 ? 'zero' : (district.openCases >= 3 ? 'high' : '');
+                html += '<tr>';
+                html += '<td><strong>' + escapeHtml(district.name) + '</strong></td>';
+                html += '<td><span class="state-badge">' + district.state + '</span></td>';
+                html += '<td>' + escapeHtml(district.city) + '</td>';
+                html += '<td>' + escapeHtml(district.phone) + '</td>';
+                html += '<td>' + escapeHtml(district.industry) + '</td>';
+                html += '<td><span class="open-cases ' + caseClass + '">' + district.openCases + '</span></td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+            if (totalPages > 1) {
+                html += '<div class="pagination">';
+                for (let i = 1; i <= totalPages; i++) { html += '<button ' + (i === currentPage ? 'class="active"' : '') + ' onclick="goToPage(' + i + ')">' + i + '</button>'; }
+                html += '</div>';
+            }
+            document.getElementById('tableContent').innerHTML = html;
+        }
+
+        function sortTable(column) {
+            filteredData.sort((a, b) => { const aVal = a[column]; const bVal = b[column]; return typeof aVal === 'number' ? bVal - aVal : aVal.localeCompare(bVal); });
+            currentPage = 1; renderTable();
+        }
+
+        function goToPage(page) { currentPage = page; renderTable(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        function resetFilters() { document.getElementById('searchInput').value = ''; document.getElementById('stateFilter').value = ''; document.getElementById('industryFilter').value = ''; filterTable(); }
+
+        function downloadTableAsCSV() {
+            const csv = [ ['District Name', 'State', 'City', 'Phone', 'Industry', 'Open Cases'].join(','),
+                ...filteredData.map(d => ['"' + d.name + '"', d.state, '"' + d.city + '"', '"' + d.phone + '"', '"' + d.industry + '"', d.openCases].join(','))
+            ].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url;
+            a.download = 'MWGL_Districts_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.click();
+        }
+
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function loadArchive() {
+            if (typeof archiveFiles !== 'undefined' && archiveFiles.length > 0) {
+                document.getElementById('archiveSection').style.display = 'block';
+                const archiveList = document.getElementById('archiveList');
+                archiveList.innerHTML = archiveFiles.map(file =>
+                    '<div class="archive-item"><a href="' + file.url + '">' + file.name + '</a><span style="font-size:12px;color:#95A5A6;">' + file.date + '</span></div>'
+                ).join('');
+            }
+        }
+    </script>
+</body>
+</html>
