@@ -1,0 +1,26 @@
+{
+  "name": "amira-automation",
+  "version": "2.0.0",
+  "description": "Amira Learning automation workflows (Daily Briefing, MWGL Queue Snapshot, etc.)",
+  "main": "scripts/index.js",
+  "scripts": {
+    "briefing": "node scripts/daily-briefing.js",
+    "mwgl:snapshot": "node scripts/mwgl-queue-snapshot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "amira",
+    "salesforce",
+    "slack",
+    "automation"
+  ],
+  "author": "Calvin Xu",
+  "license": "MIT",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "axios": "^1.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
