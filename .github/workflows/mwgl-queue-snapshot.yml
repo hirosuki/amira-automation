@@ -1,0 +1,59 @@
+name: MWGL Queue Snapshot Dashboard
+
+on:
+  schedule:
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  mwgl-dashboard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run MWGL Queue Snapshot
+        env:
+          SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
+          SF_CLIENT_SECRET: ${{ secrets.SF_CLIENT_SECRET }}
+          SF_USERNAME: ${{ secrets.SF_USERNAME }}
+          SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
+          SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
+          SLACK_DAILY_BRIEFING_TOKEN: ${{ secrets.SLACK_DAILY_BRIEFING_TOKEN }}
+          SLACK_CHANNEL: ${{ secrets.MWGL_SLACK_CHANNEL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+        run: node scripts/mwgl-queue-snapshot.js
+      
+      - name: Deploy to GitHub Pages
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: './docs'
+      
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mwgl-dashboard
+          path: ./docs/
+          retention-days: 90
+        if: always()
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "MWGL Dashboard generation failed. Check workflow logs."
